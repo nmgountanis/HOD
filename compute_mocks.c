@@ -2,8 +2,8 @@
 
 int main(int argc, char *argv[])
 {
-  if(argc != 22) {
-    printf("%d usage: ./compute_mocks Omega_m0 redshift siglogM logMmin logM0 logM1 alpha q_cen q_sat del_gamma A_con f_cen alpha_cen alpha_sat_l alpha_sat_h M_pivot_as boxsize seed [halo catalog file] [galaxy mock file] [halo environment file]\n",argc);
+  if(argc != 22 && argc != 23) {
+    printf("%d usage: ./compute_mocks Omega_m0 redshift siglogM logMmin logM0 logM1 alpha q_cen q_sat del_gamma A_con f_cen alpha_cen alpha_sat_l alpha_sat_h M_pivot_as boxsize seed [halo catalog file] [galaxy mock file] [halo environment file] [optional: alpha_high]\n",argc);
     return -1;
   }
 
@@ -23,7 +23,13 @@ int main(int argc, char *argv[])
   double alpha_cen = strtod(argv[13], NULL);
   double alpha_sat_l = strtod(argv[14], NULL); // satellite velocity bias below the pivot mass (argument below)
   double alpha_sat_h = strtod(argv[15], NULL); // satellite velocity bias above the pivot mass
-  double M_pivot_as  = strtod(argv[16], NULL); //pivot mass for sat. vel. bias
+  double M_pivot_as  = strtod(argv[16], NULL); //pivot mass for sat. vel. bias (also the pivot of the broken power law below)
+
+  /* Optional 22nd argument: satellite occupation slope above the pivot mass M_pivot_as.
+     If omitted, alpha_high = alpha and the single power law is used (identical to the original code). */
+  double alpha_high = alpha;
+  if(argc == 23) alpha_high = strtod(argv[22], NULL);
+  fprintf(stderr,"\talpha (low-mass slope): %lf  alpha_high: %lf  pivot: %lf\n", alpha, alpha_high, M_pivot_as);
 
   double boxsize = strtod(argv[17], NULL);
 
@@ -49,7 +55,7 @@ int main(int argc, char *argv[])
   fprintf(stderr,"Reading environment density from %s\n", env_file);
   fprintf(stderr,"Saving to output file %s\n", output_file);
 
-  populate_hod(siglogM, logMmin, logM0, logM1, alpha, q_cen, q_sat, A_con, del_gamma, f_cen, alpha_cen, alpha_sat_l, alpha_sat_h, M_pivot_as, \
+  populate_hod(siglogM, logMmin, logM0, logM1, alpha, alpha_high, q_cen, q_sat, A_con, del_gamma, f_cen, alpha_cen, alpha_sat_l, alpha_sat_h, M_pivot_as, \
 	       seed, Omega_m0, redshift, boxsize, halo_file, output_file, env_file);
 
   return 0;
