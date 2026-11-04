@@ -1,87 +1,55 @@
-#include "read_hdf5.h"
+#include <stdio.h>
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+#include <gsl/gsl_sf.h>
+#include <time.h>
+#include <omp.h>
 
-void* read_halo_hdf5(char filename[], char dataset_name[], size_t *len) {
-  /* open HDF5 file*/
-  hid_t halo_tid;
-  hid_t file_id, dataset, space;
-  hsize_t dims[2];
+#include "hdf5.h"
+#include "hdf5_hl.h"
 
-  file_id = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT);
+typedef struct halo
+{
+  float mass;
+  float X;
+  float Y;
+  float Z;
+  float vx;
+  float vy;
+  float vz;
+  float vrms;
+  int HID;
+  float redshift;
+  float env_percentile;
+} hostDMH;
 
-  if (file_id < 0) {
-    H5Eprint(H5E_DEFAULT, stderr);
-    exit(1); /* by default, HDF5 lib will print error to console */
-  }
+typedef struct HODgal
+{
+  float X;
+  float Y;
+  float Z;
+  float vx;
+  float vy;
+  float vz;
+  int cen_flag;
+  int host_id;
+  float host_mass;
+  float env_percentile;
+} galaxy;
 
-  dataset = H5Dopen(file_id, dataset_name, H5P_DEFAULT);
-  if (dataset < 0) {
-    H5Eprint(H5E_DEFAULT, stderr);
-    exit(1);
-  }
+typedef struct _halo_metadata
+{
+  float mass;
+  float density;
+  float percentile;
+} halo_metadata;
 
-  space = H5Dget_space(dataset);
-  H5Sget_simple_extent_dims(space, dims, NULL);
-  hostDMH *data = (hostDMH*) malloc(dims[0]*sizeof(hostDMH));
+void populate_hod(double siglogM, double logMmin, double logM0, double logM1, double alpha, double alpha_high, double q_cen, double q_sat, double A_con, double del_gamma, double f_cen, double alpha_cen, double alpha_sat_l, double alpha_sat_h, double M_pivot_as, unsigned long int seed, double Omega_m0, double redshift, double Lbox, char *input_fname, char *output_fname, char *env_fname);
+double NFW_CDF_sampler(float * restrict CDF, gsl_rng *r);
 
-  halo_tid = H5Tcreate(H5T_COMPOUND, sizeof(hostDMH));
-  H5Tinsert(halo_tid, "mass", HOFFSET(hostDMH,mass),H5T_NATIVE_FLOAT);
-  H5Tinsert(halo_tid, "x", HOFFSET(hostDMH,X), H5T_NATIVE_FLOAT);
-  H5Tinsert(halo_tid, "y", HOFFSET(hostDMH,Y), H5T_NATIVE_FLOAT);
-  H5Tinsert(halo_tid, "z", HOFFSET(hostDMH,Z), H5T_NATIVE_FLOAT);
-  H5Tinsert(halo_tid, "vx", HOFFSET(hostDMH,vx), H5T_NATIVE_FLOAT);
-  H5Tinsert(halo_tid, "vy", HOFFSET(hostDMH,vy), H5T_NATIVE_FLOAT);
-  H5Tinsert(halo_tid, "vz", HOFFSET(hostDMH,vz), H5T_NATIVE_FLOAT);
-  H5Tinsert(halo_tid, "vrms", HOFFSET(hostDMH,vrms), H5T_NATIVE_FLOAT);
-  H5Tinsert(halo_tid, "gid", HOFFSET(hostDMH,HID), H5T_NATIVE_INT); 
-
-  if (H5Dread(dataset, halo_tid, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
-    H5Eprint(H5E_DEFAULT, stderr);
-    exit(1);
-  }
-
-  *len = dims[0];
-
-  H5Fclose(file_id);
-
-  return (void*)data;
-}
-
-void* read_env_hdf5(char filename[], char dataset_name[], size_t *len) {
-  /* open HDF5 file*/
-  hid_t halo_tid;
-  hid_t file_id, dataset, space;
-  hsize_t dims[2];
-
-  file_id = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT);
-
-  if (file_id < 0) {
-    H5Eprint(H5E_DEFAULT, stderr);
-    exit(1); /* by default, HDF5 lib will print error to console */
-  }
-
-  dataset = H5Dopen(file_id, dataset_name, H5P_DEFAULT);
-  if (dataset < 0) {
-    H5Eprint(H5E_DEFAULT, stderr);
-    exit(1);
-  }
-
-  space = H5Dget_space(dataset);
-  H5Sget_simple_extent_dims(space, dims, NULL);
-  halo_metadata *data = (halo_metadata*) malloc(dims[0]*sizeof(halo_metadata));
-
-  halo_tid = H5Tcreate(H5T_COMPOUND, sizeof(halo_metadata));
-  H5Tinsert(halo_tid, "mass", HOFFSET(halo_metadata,mass),H5T_NATIVE_FLOAT);
-  H5Tinsert(halo_tid, "density", HOFFSET(halo_metadata,density),H5T_NATIVE_FLOAT);
-  H5Tinsert(halo_tid, "percentile", HOFFSET(halo_metadata,percentile),H5T_NATIVE_FLOAT);
-
-  if (H5Dread(dataset, halo_tid, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
-    H5Eprint(H5E_DEFAULT, stderr);
-    exit(1);
-  }
-
-  *len = dims[0];
-
-  H5Fclose(file_id);
-
-  return (void*)data;
-}
+void* read_halo_hdf5(char infile[],char dataset_name[],size_t *len);
+herr_t write_gal_hdf5(char filename[], char dataset_name[], size_t len, galaxy* data);
+void* read_env_hdf5(char filename[], char dataset_name[], size_t *len);
