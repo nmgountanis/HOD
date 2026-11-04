@@ -86,7 +86,7 @@ hostDMH * find_galaxy_hosts(struct halo halos[], halo_metadata * env, double sig
   return host_coords; 
 }
 
-int * find_satellites(struct halo halos[], double siglogM, double logMmin, double logM0, double logM1, double alpha, double q_sat, unsigned long int N_h, unsigned long int *Nsat, gsl_rng *r)
+int * find_satellites(struct halo halos[], double siglogM, double logMmin, double logM0, double logM1, double alpha, double alpha_high, double M_pivot_as, double q_sat, unsigned long int N_h, unsigned long int *Nsat, gsl_rng *r)
 {
   /*This function determines how many satellite galaxies each halo has using the same Zehavi 2011 prescription*/
 
@@ -113,9 +113,17 @@ int * find_satellites(struct halo halos[], double siglogM, double logMmin, doubl
 	{
 	  mean_sat = 0.0; /* Enforcing the satellite cutoff */
 	}
+      else if( (alpha_high == alpha) || !(logM > M_pivot_as) )
+	{
+	  /* single power law (original), or below the pivot of the broken power law */
+	  mean_sat = mean_cen * pow( ( ( halos[i].mass - M0 ) / M1 ), alpha );
+	}
       else
 	{
-	  mean_sat = mean_cen * pow( ( ( halos[i].mass - M0 ) / M1 ), alpha );
+	  /* broken power law above the pivot: slope alpha_high, continuous at M_pivot.
+	     Uses the same pivot and the same "logM > M_pivot_as" test as the satellite velocity bias. */
+	  double Mp = pow(10.0, M_pivot_as);
+	  mean_sat = mean_cen * pow( ( ( Mp - M0 ) / M1 ), alpha ) * pow( ( ( halos[i].mass - M0 ) / ( Mp - M0 ) ), alpha_high );
 	}
       unsigned int N_sat_this_halo = gsl_ran_poisson(r, mean_sat); /* Drawing from Poisson distribution centered at mean_sat to determine Nsat */
       satellites[i] =  N_sat_this_halo;
@@ -201,7 +209,7 @@ inline double wrap_periodic(double x, double Lbox)
   }
 }
 
-void populate_hod(double siglogM, double logMmin, double logM0, double logM1, double alpha, double q_cen, double q_sat, double A_con, double del_gamma, double f_cen, double alpha_cen, double alpha_sat_l, double alpha_sat_h, double M_pivot_as, unsigned long int seed, double Omega_m0, double redshift, double Lbox, char *input_fname, char *output_fname, char *env_fname)
+void populate_hod(double siglogM, double logMmin, double logM0, double logM1, double alpha, double alpha_high, double q_cen, double q_sat, double A_con, double del_gamma, double f_cen, double alpha_cen, double alpha_sat_l, double alpha_sat_h, double M_pivot_as, unsigned long int seed, double Omega_m0, double redshift, double Lbox, char *input_fname, char *output_fname, char *env_fname)
 {
   printf("Checkpoint 0");
   fflush(stdout);
@@ -269,7 +277,7 @@ void populate_hod(double siglogM, double logMmin, double logM0, double logM1, do
   fflush(stdout);
 	
   int *sats; //Number of Satellites for each halo
-  sats = find_satellites(cenhalos, siglogM, logMmin, logM0, logM1, alpha, q_sat, Ncen, &Nsat, r);
+  sats = find_satellites(cenhalos, siglogM, logMmin, logM0, logM1, alpha, alpha_high, M_pivot_as, q_sat, Ncen, &Nsat, r);
   galaxy * coords  = malloc(Nsat*sizeof(galaxy)); //Satellite Coordinates
   int j,k,l=0;
 
